@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/stefankopieczek/gossip/base"
 	"github.com/stefankopieczek/gossip/log"
 )
 
@@ -9,33 +10,64 @@ var (
 	caller = &endpoint{
 		displayName: "Ryan",
 		username:    "ryan",
-		host:        "centosvm-rpn",
+		host:        "192.168.0.2",
 		port:        5060,
-		transport:   "TCP",
+		transport:   "UDP",
 	}
 
 	// Callee parameters
 	callee = &endpoint{
-		displayName: "Stefan",
-		username:    "stefan",
-		host:        "PC4470",
+		displayName: "Ryan's PC",
+		username:    "ryan",
+		host:        "192.168.0.9",
 		port:        5060,
 		transport:   "TCP",
 	}
 )
 
 func main() {
-	log.SetDefaultLogLevel(log.INFO)
+	log.SetDefaultLogLevel(log.DEBUG)
 	err := caller.Start()
 	if err != nil {
 		log.Warn("Failed to start caller: %v", err)
 		return
 	}
 
-	err = caller.Invite(callee)
-	if err != nil {
-		log.Warn("Failed to setup call: %v", err)
-	}
+	log.Info("Listening for incoming requests...")
+	tx := <-caller.tm.Requests()
+	r := tx.Origin()
+	log.Info("Received request: %v", r.Short())
+	log.Debug("Full form:\n%v\n", r.String())
 
-	log.Info("Call successfully set up.  Exiting.")
+	// Send a 200 OK
+	resp := base.NewResponse(
+		"SIP/2.0",
+		200,
+		"OK",
+		[]base.SipHeader{},
+		"",
+	)
+
+	base.CopyHeaders("Via", tx.Origin(), resp)
+	base.CopyHeaders("From", tx.Origin(), resp)
+	base.CopyHeaders("To", tx.Origin(), resp)
+	base.CopyHeaders("Call-Id", tx.Origin(), resp)
+	base.CopyHeaders("CSeq", tx.Origin(), resp)
+	resp.AddHeader(
+		&base.ContactHeader{
+			DisplayName: &caller.displayName,
+			Address: &base.SipUri{
+				User: &caller.username,
+				Host: caller.host,
+			},
+		},
+	)
+
+	log.Info("Sending 200 OK")
+	tx.Respond(resp)
+
+	ack := <-tx.Ack()
+
+	log.Info("Received ACK")
+	log.Debug("Full form:\n%v\n", ack.String())
 }
