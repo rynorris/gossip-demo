@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/stefankopieczek/gossip/base"
+	"time"
+
 	"github.com/stefankopieczek/gossip/log"
 )
 
@@ -26,48 +27,24 @@ var (
 )
 
 func main() {
-	log.SetDefaultLogLevel(log.DEBUG)
+	log.SetDefaultLogLevel(log.INFO)
 	err := caller.Start()
 	if err != nil {
 		log.Warn("Failed to start caller: %v", err)
 		return
 	}
 
-	log.Info("Listening for incoming requests...")
-	tx := <-caller.tm.Requests()
-	r := tx.Origin()
-	log.Info("Received request: %v", r.Short())
-	log.Debug("Full form:\n%v\n", r.String())
+	err = caller.Invite(callee)
+	if err != nil {
+		log.Warn("Failed to start call: %v", err)
+		return
+	}
 
-	// Send a 200 OK
-	resp := base.NewResponse(
-		"SIP/2.0",
-		200,
-		"OK",
-		[]base.SipHeader{},
-		"",
-	)
-
-	base.CopyHeaders("Via", tx.Origin(), resp)
-	base.CopyHeaders("From", tx.Origin(), resp)
-	base.CopyHeaders("To", tx.Origin(), resp)
-	base.CopyHeaders("Call-Id", tx.Origin(), resp)
-	base.CopyHeaders("CSeq", tx.Origin(), resp)
-	resp.AddHeader(
-		&base.ContactHeader{
-			DisplayName: &caller.displayName,
-			Address: &base.SipUri{
-				User: &caller.username,
-				Host: caller.host,
-			},
-		},
-	)
-
-	log.Info("Sending 200 OK")
-	tx.Respond(resp)
-
-	ack := <-tx.Ack()
-
-	log.Info("Received ACK")
-	log.Debug("Full form:\n%v\n", ack.String())
+	// Send a BYE after 3 seconds.
+	<-time.After(5 * time.Second)
+	err = caller.Bye(callee)
+	if err != nil {
+		log.Warn("Failed to end call: %v", err)
+		return
+	}
 }
