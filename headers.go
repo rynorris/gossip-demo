@@ -21,10 +21,10 @@ func Via(e *endpoint, branch string) *base.ViaHeader {
 
 func To(e *endpoint, tag string) *base.ToHeader {
 	header := &base.ToHeader{
-		DisplayName: &callee.displayName,
+		DisplayName: &e.displayName,
 		Address: &base.SipUri{
-			User:      &callee.username,
-			Host:      callee.host,
+			User:      &e.username,
+			Host:      e.host,
 			UriParams: base.Params{},
 		},
 		Params: base.Params{},

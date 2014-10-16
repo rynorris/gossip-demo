@@ -19,32 +19,26 @@ var (
 	// Callee parameters
 	callee = &endpoint{
 		displayName: "Ryan's PC",
-		username:    "ryan",
+		username:    "stefan",
 		host:        "192.168.0.9",
 		port:        5060,
-		transport:   "TCP",
+		transport:   "UDP",
 	}
 )
 
 func main() {
-	log.SetDefaultLogLevel(log.INFO)
+	log.SetDefaultLogLevel(log.DEBUG)
 	err := caller.Start()
 	if err != nil {
 		log.Warn("Failed to start caller: %v", err)
 		return
 	}
 
-	err = caller.Invite(callee)
-	if err != nil {
-		log.Warn("Failed to start call: %v", err)
-		return
-	}
+	// Receive an incoming call.
+	caller.ServeInvite()
 
-	// Send a BYE after 3 seconds.
-	<-time.After(5 * time.Second)
-	err = caller.Bye(callee)
-	if err != nil {
-		log.Warn("Failed to end call: %v", err)
-		return
-	}
+	<-time.After(2 * time.Second)
+
+	// Send the BYE
+	caller.Bye(callee)
 }

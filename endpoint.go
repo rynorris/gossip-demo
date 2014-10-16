@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/stefankopieczek/gossip/base"
 	"github.com/stefankopieczek/gossip/log"
@@ -56,7 +57,7 @@ func (caller *endpoint) Invite(callee *endpoint) error {
 	// Starting a dialog.
 	callid := "thisisacall" + string(caller.dialogIx)
 	tag := "tag." + caller.username + "." + caller.host
-	branch := "z9hG4bK.callbranch"
+	branch := "z9hG4bK.callbranch.INVITE"
 	caller.dialog.callId = callid
 	caller.dialog.from_tag = tag
 	caller.dialog.currentTx = txInfo{}
@@ -118,6 +119,7 @@ func (caller *endpoint) Bye(callee *endpoint) error {
 }
 
 func (caller *endpoint) nonInvite(callee *endpoint, method base.Method) error {
+	caller.dialog.currentTx.branch = "z9hG4bK.callbranch." + string(method)
 	request := base.NewRequest(
 		method,
 		&base.SipUri{
@@ -140,6 +142,7 @@ func (caller *endpoint) nonInvite(callee *endpoint, method base.Method) error {
 
 	log.Info("Sending: %v", request.Short())
 	tx := caller.tm.Send(request, fmt.Sprintf("%v:%v", callee.host, callee.port))
+	caller.dialog.currentTx.tx = transaction.Transaction(tx)
 	for {
 		select {
 		case r := <-tx.Responses():
@@ -164,6 +167,49 @@ func (caller *endpoint) nonInvite(callee *endpoint, method base.Method) error {
 // Server side function.
 
 func (e *endpoint) ServeInvite() {
+	log.Info("Listening for incoming requests...")
+	tx := <-e.tm.Requests()
+	r := tx.Origin()
+	log.Info("Received request: %v", r.Short())
+	log.Debug("Full form:\n%v\n", r.String())
+
+	e.dialog.callId = string(*r.Headers("Call-Id")[0].(*base.CallId))
+
+	// Send a 200 OK
+	resp := base.NewResponse(
+		"SIP/2.0",
+		200,
+		"OK",
+		[]base.SipHeader{},
+		"",
+	)
+
+	base.CopyHeaders("Via", tx.Origin(), resp)
+	base.CopyHeaders("From", tx.Origin(), resp)
+	base.CopyHeaders("To", tx.Origin(), resp)
+	base.CopyHeaders("Call-Id", tx.Origin(), resp)
+	base.CopyHeaders("CSeq", tx.Origin(), resp)
+	resp.AddHeader(
+		&base.ContactHeader{
+			DisplayName: &e.displayName,
+			Address: &base.SipUri{
+				User: &e.username,
+				Host: e.host,
+			},
+		},
+	)
+
+	log.Info("Sending 200 OK")
+	<-time.After(1 * time.Second)
+	tx.Respond(resp)
+
+	ack := <-tx.Ack()
+
+	log.Info("Received ACK")
+	log.Debug("Full form:\n%v\n", ack.String())
+}
+
+func (e *endpoint) ServeNonInvite() {
 	log.Info("Listening for incoming requests...")
 	tx := <-e.tm.Requests()
 	r := tx.Origin()
@@ -195,10 +241,6 @@ func (e *endpoint) ServeInvite() {
 	)
 
 	log.Info("Sending 200 OK")
+	<-time.After(1 * time.Second)
 	tx.Respond(resp)
-
-	ack := <-tx.Ack()
-
-	log.Info("Received ACK")
-	log.Debug("Full form:\n%v\n", ack.String())
 }
