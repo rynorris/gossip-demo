@@ -97,9 +97,11 @@ func (caller *endpoint) Invite(callee *endpoint) {
 				// Ack 200s manually.
 				log.Info("Sending Ack")
 				tx.Ack()
+				return
 			}
 		case e := <-tx.Errors():
 			log.Warn(e.Error())
+			return
 		}
 	}
 }
