@@ -15,7 +15,6 @@ type endpoint struct {
 	host        string
 
 	// Transport Params
-	addr      string // Listens on and sends from this address.
 	port      uint16 // Listens on this port.
 	transport string // Sends using this transport. ("tcp" or "udp")
 
@@ -24,7 +23,7 @@ type endpoint struct {
 }
 
 func (e *endpoint) Start() error {
-	tm, err := transaction.NewManager(e.transport, fmt.Sprintf("%v:%v", e.addr, e.port))
+	tm, err := transaction.NewManager(e.transport, fmt.Sprintf("%v:%v", e.host, e.port))
 	if err != nil {
 		return err
 	}
@@ -34,7 +33,7 @@ func (e *endpoint) Start() error {
 	return nil
 }
 
-func (caller *endpoint) Invite(callee *endpoint) {
+func (caller *endpoint) Invite(callee *endpoint) error {
 	branch := "z9hG4bK.callbranch1"
 	callid := base.CallId("thisisacall3")
 	invite := base.NewRequest(
@@ -50,7 +49,7 @@ func (caller *endpoint) Invite(callee *endpoint) {
 					ProtocolName:    "SIP",
 					ProtocolVersion: "2.0",
 					Transport:       caller.transport,
-					Host:            caller.addr,
+					Host:            caller.host,
 					Port:            &caller.port,
 					Params: base.Params{
 						"branch": &branch,
@@ -58,12 +57,14 @@ func (caller *endpoint) Invite(callee *endpoint) {
 				},
 			},
 			&base.ToHeader{
+				DisplayName: &callee.displayName,
 				Address: &base.SipUri{
 					User: &callee.username,
 					Host: callee.host,
 				},
 			},
 			&base.FromHeader{
+				DisplayName: &caller.displayName,
 				Address: &base.SipUri{
 					User: &caller.username,
 					Host: caller.host,
@@ -73,6 +74,7 @@ func (caller *endpoint) Invite(callee *endpoint) {
 				},
 			},
 			&base.ContactHeader{
+				DisplayName: &caller.displayName,
 				Address: &base.SipUri{
 					User: &caller.username,
 					Host: caller.host,
@@ -88,20 +90,26 @@ func (caller *endpoint) Invite(callee *endpoint) {
 		"",
 	)
 
+	log.Info("Sending: %v", invite.Short())
 	tx := caller.tm.Send(invite, fmt.Sprintf("%v:%v", callee.host, callee.port))
 	for {
 		select {
 		case r := <-tx.Responses():
-			log.Info(r.String())
-			if r.StatusCode < 300 && r.StatusCode >= 200 {
+			log.Info("Received response: %v", r.Short())
+			log.Debug("Full form:\n%v\n", r.String())
+			switch {
+			case r.StatusCode >= 300:
+				// Call setup failed.
+				return fmt.Errorf("callee sent negative response code %v.", r.StatusCode)
+			case r.StatusCode >= 200:
 				// Ack 200s manually.
 				log.Info("Sending Ack")
 				tx.Ack()
-				return
+				return nil
 			}
 		case e := <-tx.Errors():
 			log.Warn(e.Error())
-			return
+			return e
 		}
 	}
 }

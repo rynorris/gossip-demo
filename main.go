@@ -10,7 +10,6 @@ var (
 		displayName: "Ryan",
 		username:    "ryan",
 		host:        "centosvm-rpn",
-		addr:        "centosvm-rpn",
 		port:        5060,
 		transport:   "TCP",
 	}
@@ -20,18 +19,23 @@ var (
 		displayName: "Stefan",
 		username:    "stefan",
 		host:        "PC4470",
-		addr:        "PC4470",
 		port:        5060,
 		transport:   "TCP",
 	}
 )
 
 func main() {
+	log.SetDefaultLogLevel(log.INFO)
 	err := caller.Start()
 	if err != nil {
 		log.Warn("Failed to start caller: %v", err)
 		return
 	}
 
-	caller.Invite(callee)
+	err = caller.Invite(callee)
+	if err != nil {
+		log.Warn("Failed to setup call: %v", err)
+	}
+
+	log.Info("Call successfully set up.  Exiting.")
 }
