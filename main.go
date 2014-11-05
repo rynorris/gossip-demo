@@ -1,25 +1,38 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/stefankopieczek/gossip/base"
 	"github.com/stefankopieczek/gossip/log"
 	"github.com/stefankopieczek/gossip/transaction"
 )
 
+var (
+	// Call parameters
+	transport = "UDP"
+	callid    = base.CallId("thisisacall3")
+	branch    = "z9hG4bK.callbranch1"
+
+	// Caller parameters
+	caller             = "ryan"
+	src_host           = "centosvm-rpn"
+	listen_port uint16 = 5060
+
+	// Callee parameters
+	callee          = "stefan"
+	dst_host        = "172.18.115.72"
+	dst_port uint16 = 5060
+)
+
 func main() {
 	log.SetDefaultLogLevel(log.DEBUG)
 	// Build an INVITE to send.
-	stefan := "stefan"
-	ryan := "ryan"
-	callid := base.CallId("thisisacall3")
-	branch := "z9hG4bKcallbranch1"
-	tcp := "tcp"
-	var port uint16 = 5060
 	invite := base.NewRequest(
 		base.INVITE,
 		&base.SipUri{
-			User: &stefan,
-			Host: "172.18.115.72",
+			User: &callee,
+			Host: dst_host,
 		},
 		"SIP/2.0",
 		[]base.SipHeader{
@@ -27,9 +40,9 @@ func main() {
 				&base.ViaHop{
 					ProtocolName:    "SIP",
 					ProtocolVersion: "2.0",
-					Transport:       "TCP",
-					Host:            "172.18.115.75",
-					Port:            &port,
+					Transport:       transport,
+					Host:            dst_host,
+					Port:            &dst_port,
 					Params: base.Params{
 						"branch": &branch,
 					},
@@ -37,23 +50,23 @@ func main() {
 			},
 			&base.ToHeader{
 				Address: &base.SipUri{
-					User: &stefan,
-					Host: "172.18.115.72",
+					User: &callee,
+					Host: dst_host,
 				},
 			},
 			&base.FromHeader{
 				Address: &base.SipUri{
-					User: &ryan,
-					Host: "172.18.115.75",
+					User: &caller,
+					Host: src_host,
 					UriParams: base.Params{
-						"transport": &tcp,
+						"transport": &transport,
 					},
 				},
 			},
 			&base.ContactHeader{
 				Address: &base.SipUri{
-					User: &ryan,
-					Host: "172.18.115.75",
+					User: &caller,
+					Host: src_host,
 				},
 			},
 			&base.CSeq{
@@ -66,12 +79,12 @@ func main() {
 		"",
 	)
 
-	tm, err := transaction.NewManager("tcp", "172.18.115.75:5060")
+	tm, err := transaction.NewManager(transport, fmt.Sprintf("%v:%v", src_host, listen_port))
 	if err != nil {
 		panic(err)
 	}
 
-	tx := tm.Send(invite, "172.18.115.72:5060")
+	tx := tm.Send(invite, fmt.Sprintf("%v:%v", dst_host, dst_port))
 
 	for {
 		select {
