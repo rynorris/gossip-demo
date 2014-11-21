@@ -23,9 +23,11 @@ func To(e *endpoint, tag string) *base.ToHeader {
 	header := &base.ToHeader{
 		DisplayName: &e.displayName,
 		Address: &base.SipUri{
-			User:      &e.username,
-			Host:      e.host,
-			UriParams: base.Params{},
+			User: &e.username,
+			Host: e.host,
+			UriParams: base.Params{
+				"transport": &e.transport,
+			},
 		},
 		Params: base.Params{},
 	}
@@ -63,6 +65,7 @@ func Contact(e *endpoint) *base.ContactHeader {
 		Address: &base.SipUri{
 			User: &e.username,
 			Host: e.host,
+			Port: &e.port,
 		},
 	}
 }
