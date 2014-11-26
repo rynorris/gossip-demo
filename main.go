@@ -53,6 +53,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	runtime.SetBlockProfileRate(0)
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 
@@ -60,22 +61,22 @@ func main() {
 	caller.dialog.cseq = 1
 	successes := 0
 	tries := 0
+	thissecond := 0
+	persecond := 10000
+	start := time.Now()
 	success := make(chan struct{}, 10)
-	ticker := time.NewTicker(time.Second)
 	go func() {
 		for _ = range success {
 			successes++
 		}
 	}()
 	end := time.After(20 * time.Second)
-	stop := time.After(10 * time.Second)
-	try := time.NewTicker(500 * time.Microsecond)
+	second := time.NewTicker(1 * time.Second)
 	go callee.ServeNonInvite()
-loop:
-	for {
-		select {
-		case <-try.C:
+	go func() {
+		for {
 			tries++
+			thissecond++
 			sub_num++
 			caller.dialog.callId = fmt.Sprintf("callid%v", sub_num)
 			caller.username = fmt.Sprintf("user%v", sub_num)
@@ -88,14 +89,25 @@ loop:
 					//fmt.Printf("Registration failed: %v\n", err.Error())
 				}
 			}()
-		case <-ticker.C:
-			fmt.Printf("%v tries. %v successes.\n", tries, successes)
-			fmt.Printf("Currently %v goroutines exist.", runtime.NumGoroutine())
-		case <-stop:
-			try.Stop()
+
+			if thissecond == persecond {
+				thissecond = 0
+				<-second.C
+				fmt.Printf("%v tries. %v successes.\n", tries, successes)
+				fmt.Printf("Currently %v goroutines exist.\n", runtime.NumGoroutine())
+				fmt.Printf("Time since start: %v\n", time.Since(start))
+			}
+		}
+	}()
+loop:
+	for {
+		select {
 		case <-end:
 			f, _ := os.Create("memprof.out")
 			pprof.WriteHeapProfile(f)
+			f.Close()
+			f, _ = os.Create("blockprof.out")
+			pprof.Lookup("block").WriteTo(f, 0)
 			f.Close()
 			break loop
 		default:
